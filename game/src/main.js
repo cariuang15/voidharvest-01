@@ -1,19 +1,19 @@
 // Boot and the one loop: input is read every frame, the world advances in fixed
 // 1/60 s steps (several in a slow frame, none in a fast one), and the renderer
-// paints what is there. The game moves between five screens: title, play,
-// upgrade draft, paused and game over.
+// paints what is there. The game moves between six screens: title, play,
+// upgrade draft, paused, game over and victory.
 //
 // ?seed=N fixes the run. ?shot=start|play|draft|end (with &seed=N) stages that
 // scene instead of running the loop, paints it twice and sets window.__shotReady
 // for a screenshot.
 import { STEP } from './config.js';
 import { createRandom } from './random.js';
-import { createWorld, EVENT_OVER, EVENT_WAVE_CLEAR } from './world.js';
+import { createWorld, EVENT_OVER, EVENT_VICTORY, EVENT_WAVE_CLEAR } from './world.js';
 import { ACTION_CONFIRM, ACTION_DASH, ACTION_MUTE, ACTION_NOVA, ACTION_PAUSE, createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { createParticles } from './particles.js';
 import {
-  createRenderer, draftCardAt, SCREEN_DRAFT, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE,
+  createRenderer, draftCardAt, SCREEN_DRAFT, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE, SCREEN_VICTORY,
 } from './render.js';
 import { stageShot } from './shots.js';
 import { readBest, saveBest } from './storage.js';
@@ -88,6 +88,15 @@ function runGame() {
     announce(`Game over. Score ${world.state.score}. Best ${best.score}.`);
   }
 
+  function winGame() {
+    screen = SCREEN_VICTORY;
+    if (world.state.score > best.score) {
+      best = { score: world.state.score, wave: world.state.wave };
+      saveBest(best.score, best.wave);
+    }
+    announce(`Victory. Score ${world.state.score}. Best ${best.score}.`);
+  }
+
   function handleActions() {
     const actions = input.takeActions();
     if (actions & ACTION_DASH) dashQueued = true;
@@ -98,6 +107,14 @@ function runGame() {
     }
     if (screen === SCREEN_TITLE || screen === SCREEN_OVER) {
       if (actions & ACTION_CONFIRM) startGame();
+      return;
+    }
+    if (screen === SCREEN_VICTORY) {
+      if (actions & ACTION_CONFIRM) {
+        world.continueEndless();
+        screen = SCREEN_PLAY;
+        announce(`Endless mode. Wave ${world.state.wave}.`);
+      }
       return;
     }
     if (screen === SCREEN_PLAY) {
@@ -154,6 +171,7 @@ function runGame() {
       screen = SCREEN_DRAFT;
       announce(`Wave ${world.state.wave} cleared. Choose an upgrade, or press Enter for the next wave.`);
     }
+    if (events & EVENT_VICTORY || world.state.phase === 'victory') winGame();
     if (events & EVENT_OVER || world.state.phase === 'over') endGame();
   }
 

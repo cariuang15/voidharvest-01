@@ -3,12 +3,12 @@
 // by a simple autopilot, so the frame is what a short game really looks like
 // and the same seed always gives the same frame.
 import { FIELD, STEP } from './config.js';
-import { SCREEN_DRAFT, SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+import { SCREEN_DRAFT, SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE, SCREEN_VICTORY } from './render.js';
 
 const START_SECONDS = 5;
-const PLAY_SECONDS = 75;
-const END_LIMIT_SECONDS = 300;
-const SKILLED_END_SECONDS = 75;
+const PLAY_SECONDS = 100;
+const END_LIMIT_SECONDS = 360;
+const SKILLED_END_SECONDS = 240;
 const DRAFT_WAVE = 3;
 const SAMPLE = STEP;
 
@@ -28,10 +28,13 @@ function autopilot(world, skilled) {
   let nearest = null;
   let nearestD = Infinity;
   let alive = 0;
+  let bossAlive = false;
   for (const e of ents.enemies) {
     if (!e.active) continue;
     alive += 1;
-    const d = Math.hypot(e.x - p.x, e.y - p.y);
+    if (e.kind === 'boss' || e.kind === 'prime') bossAlive = true;
+    // The final boss is the priority target: a skilled player focuses it.
+    const d = e.kind === 'prime' ? -1 : Math.hypot(e.x - p.x, e.y - p.y);
     if (d < nearestD) {
       nearestD = d;
       nearest = e;
@@ -76,8 +79,8 @@ function autopilot(world, skilled) {
     moveX += ((shard.x - p.x) / (shardD || 1)) * 1.1;
     moveY += ((shard.y - p.y) / (shardD || 1)) * 1.1;
   }
-  moveX += (FIELD.width / 2 - p.x) / FIELD.width * 0.4;
-  moveY += (FIELD.height / 2 - p.y) / FIELD.height * 0.4;
+  moveX += (FIELD.width / 2 - p.x) / FIELD.width * (bossAlive ? 1.0 : 0.4);
+  moveY += (FIELD.height / 2 - p.y) / FIELD.height * (bossAlive ? 1.0 : 0.4);
   const len = Math.hypot(moveX, moveY);
   if (len > 1) {
     moveX /= len;
@@ -98,10 +101,17 @@ function busyness(world) {
     if (e.x < -10 || e.x > FIELD.width + 10 || e.y < -10 || e.y > FIELD.height + 10) continue;
     b += 3;
     if (e.kind === 'boss') b += 40;
+    if (e.kind === 'prime') b += 60;
+    if (e.kind === 'warden') b += 3;
     if (e.kind === 'charger' && e.mode === 'windup') b += 6;
     const d = Math.hypot(e.x - p.x, e.y - p.y);
     if (d < 320) b += 4;
     if (d < 160) b += 4;
+    // A fight reads best when it fills the middle of the frame, not the corners:
+    // central enemies score extra, and a boss hugging an edge costs the frame.
+    const central = e.x > 200 && e.x < FIELD.width - 200 && e.y > 150 && e.y < FIELD.height - 150;
+    if (central) b += 3;
+    if ((e.kind === 'boss' || e.kind === 'prime') && !central) b -= 25;
   }
   for (const x of ents.playerBullets) if (x.active) b += 1;
   for (const x of ents.enemyBullets) if (x.active) b += 2;
@@ -160,11 +170,13 @@ export function stageShot(name, world, seed) {
   const limit = name === 'end' ? END_LIMIT_SECONDS : 240;
   for (let i = 0; i < limit / STEP; i += 1) {
     // The end scene plays well first — collecting shards, buying upgrades —
-    // then stops moving, so the run ends with real stats instead of zeroes.
+    // long enough to reach the wave-10 final boss and slay it for a victory
+    // screen; if the run still stands after that, it stops moving, so the
+    // run ends with real stats instead of zeroes.
     const skilled = name !== 'end' || i < SKILLED_END_SECONDS / STEP;
     const input = autopilot(world, skilled);
     world.step(STEP, input);
-    if (world.state.phase === 'over') break;
+    if (world.state.phase === 'over' || world.state.phase === 'victory') break;
     if (world.state.phase === 'draft') {
       // The draft scene shows a mid-run choice: leveled cards, a real shard purse.
       if (name === 'draft' && world.state.wave >= DRAFT_WAVE) break;
@@ -177,6 +189,7 @@ export function stageShot(name, world, seed) {
     }
   }
   const s = world.state;
+  if (s.phase === 'victory') return { screen: SCREEN_VICTORY, best: s.score };
   if (s.phase === 'over') return { screen: SCREEN_OVER, best: s.score };
   if (s.phase === 'draft') return { screen: SCREEN_DRAFT, best: s.score };
   return { screen: SCREEN_PLAY, best: s.score };

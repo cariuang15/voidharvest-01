@@ -9,6 +9,7 @@ export const SCREEN_PLAY = 'play';
 export const SCREEN_DRAFT = 'draft';
 export const SCREEN_PAUSED = 'paused';
 export const SCREEN_OVER = 'over';
+export const SCREEN_VICTORY = 'victory';
 
 /** Which upgrade card (0-2) the point is over, or -1. Same layout as drawDraft. */
 export function draftCardAt(x, y) {
@@ -226,6 +227,65 @@ export function createRenderer(canvas) {
       ctx.beginPath();
       ctx.arc(0, 0, e.radius * 0.45, 0, Math.PI * 2);
       ctx.fill();
+    } else if (e.kind === 'warden') {
+      // A teal hexagon guard; its shield ring spins while it still holds charges.
+      ctx.rotate(e.t * 0.9);
+      ctx.beginPath();
+      for (let i = 0; i < 6; i += 1) {
+        const a = (i / 6) * Math.PI * 2;
+        const px = Math.cos(a) * e.radius;
+        const py = Math.sin(a) * e.radius;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      if (e.shield > 0) {
+        ctx.save();
+        ctx.rotate(-e.t * 0.9);
+        ctx.strokeStyle = 'rgba(125, 255, 212, 0.95)';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#7dffd4';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.radius + 9, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else if (e.kind === 'prime') {
+      // The final boss: a great violet maw, bigger and brighter than the Maw.
+      ctx.rotate(e.t * 0.5);
+      ctx.beginPath();
+      const teeth = 16;
+      for (let i = 0; i < teeth * 2; i += 1) {
+        const a = (i / (teeth * 2)) * Math.PI * 2;
+        const r = i % 2 === 0 ? e.radius + 12 : e.radius * 0.86;
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#1c0218';
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      const pulse = 0.6 + 0.4 * Math.sin(time * 5);
+      ctx.fillStyle = `rgba(212, 0, 255, ${0.55 + 0.35 * pulse})`;
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius * 0.34 * (0.9 + 0.15 * pulse), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius * 0.12, 0, Math.PI * 2);
+      ctx.fill();
     } else if (e.kind === 'boss') {
       // A great maw: a dark ringed disc with a rotating toothed rim and a glowing core.
       ctx.rotate(e.t * 0.5);
@@ -341,12 +401,33 @@ export function createRenderer(canvas) {
     ctx.textAlign = 'left';
     // Boss health bar.
     for (const e of state.bossRef ?? []) {
-      if (!e.active || e.kind !== 'boss') continue;
+      if (!e.active || (e.kind !== 'boss' && e.kind !== 'prime')) continue;
+      const label = e.kind === 'prime' ? 'VOID MAW PRIME' : 'VOID MAW';
+      const color = e.kind === 'prime' ? '#d400ff' : '#ff2e63';
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#ff2e63';
+      ctx.fillStyle = color;
       ctx.font = `800 18px ${FONT}`;
-      ctx.fillText('VOID MAW', FIELD.width / 2, FIELD.height - 52);
-      bar(FIELD.width / 2 - 220, FIELD.height - 44, 440, 12, e.hp / e.maxHp, '#ff2e63', 'rgba(255,255,255,0.14)');
+      ctx.fillText(label, FIELD.width / 2, FIELD.height - 52);
+      bar(FIELD.width / 2 - 220, FIELD.height - 44, 440, 12, e.hp / e.maxHp, color, 'rgba(255,255,255,0.14)');
+    }
+    // SHARD RUSH: double drops this wave.
+    if (state.rush && screen === SCREEN_PLAY) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#ffe066';
+      ctx.font = `800 18px ${FONT}`;
+      ctx.fillText('SHARD RUSH — double drops', FIELD.width - 24, 122);
+    }
+    // Kill-streak announcement.
+    if (state.announceTimer > 0 && state.announce && screen === SCREEN_PLAY) {
+      ctx.globalAlpha = Math.min(1, state.announceTimer / 0.5);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffb703';
+      ctx.font = `800 34px ${FONT_DISPLAY}`;
+      ctx.shadowColor = '#ff8c42';
+      ctx.shadowBlur = 18;
+      ctx.fillText(state.announce, FIELD.width / 2, 300);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
     }
     // Wave banner.
     if (state.bannerTimer > 0) {
@@ -395,6 +476,9 @@ export function createRenderer(canvas) {
     ctx.fillStyle = '#ffe066';
     ctx.fillText('Kill voidborn, collect ◆ shards, buy 1 upgrade after each wave.', FIELD.width / 2, 428);
     ctx.fillText('Kills charge your NOVA. Every 5th wave the VOID MAW comes for you.', FIELD.width / 2, 456);
+    ctx.fillStyle = '#d400ff';
+    ctx.font = `800 20px ${FONT}`;
+    ctx.fillText('GOAL: slay the VOID MAW PRIME on WAVE 10 to win — then keep flying in Endless.', FIELD.width / 2, 516);
     ctx.fillStyle = '#4de8ff';
     ctx.font = `800 26px ${FONT}`;
     ctx.fillText('CLICK OR PRESS ENTER TO LAUNCH', FIELD.width / 2, 540);
@@ -464,6 +548,42 @@ export function createRenderer(canvas) {
       }
     }
     ctx.fillText(line, cx, yy);
+  }
+
+  function drawVictory(state, best) {
+    ctx.fillStyle = 'rgba(3, 4, 12, 0.62)';
+    ctx.fillRect(0, 0, FIELD.width, FIELD.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe066';
+    ctx.font = `800 64px ${FONT_DISPLAY}`;
+    ctx.shadowColor = '#d400ff';
+    ctx.shadowBlur = 30;
+    ctx.fillText('VOID CONQUERED', FIELD.width / 2, 210);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = PALETTE.text;
+    ctx.font = `600 22px ${FONT}`;
+    ctx.fillText('You slew the VOID MAW PRIME on wave 10. The void is yours.', FIELD.width / 2, 252);
+    const isBest = state.score >= best && state.score > 0;
+    ctx.fillStyle = isBest ? '#ffe066' : PALETTE.text;
+    ctx.font = `800 30px ${FONT}`;
+    ctx.fillText(isBest ? '★ NEW BEST SCORE ★' : `SCORE  ${state.score.toLocaleString('en-US')}`, FIELD.width / 2, 296);
+    panel(FIELD.width / 2 - 260, 324, 520, 190);
+    ctx.fillStyle = PALETTE.text;
+    ctx.font = `600 19px ${FONT}`;
+    const rows = [
+      `Waves survived   ${state.wave}`,
+      `Voidborn destroyed   ${state.kills}`,
+      `Shards harvested   ${state.shardsCollected}`,
+      `Best combo   x${(1 + Math.min(30, state.bestCombo) * 0.1).toFixed(1)}  (${state.bestCombo} kills)`,
+      `Time in the void   ${Math.floor(state.time / 60)}:${String(Math.floor(state.time % 60)).padStart(2, '0')}`,
+    ];
+    rows.forEach((row, i) => ctx.fillText(row, FIELD.width / 2, 360 + i * 30));
+    ctx.fillStyle = '#7dff9e';
+    ctx.font = `800 24px ${FONT}`;
+    ctx.fillText('PRESS ENTER OR CLICK TO KEEP FLYING — ENDLESS MODE', FIELD.width / 2, 576);
+    ctx.fillStyle = PALETTE.muted;
+    ctx.font = `600 16px ${FONT}`;
+    ctx.fillText(`Best score  ${best.toLocaleString('en-US')}`, FIELD.width / 2, 612);
   }
 
   function drawOver(state, best) {
@@ -601,7 +721,8 @@ export function createRenderer(canvas) {
       if (screen === SCREEN_DRAFT) drawDraft(state);
       if (screen === SCREEN_PAUSED) drawPaused();
       if (screen === SCREEN_OVER) drawOver(state, best);
-      if (screen === SCREEN_TITLE || screen === SCREEN_OVER) {
+      if (screen === SCREEN_VICTORY) drawVictory(state, best);
+      if (screen === SCREEN_TITLE || screen === SCREEN_OVER || screen === SCREEN_VICTORY) {
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(139, 147, 184, 0.8)';
         ctx.font = `600 14px ${FONT}`;

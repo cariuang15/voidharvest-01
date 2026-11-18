@@ -8,8 +8,8 @@ const COMPOSITION = [
   ['drifter'],
   ['drifter', 'weaver'],
   ['drifter', 'weaver', 'splitter', 'stinger'],
-  ['drifter', 'weaver', 'splitter', 'mini', 'stinger'],
-  ['drifter', 'weaver', 'splitter', 'mini', 'stinger', 'charger'],
+  ['drifter', 'weaver', 'splitter', 'mini', 'stinger', 'warden'],
+  ['drifter', 'weaver', 'splitter', 'mini', 'stinger', 'charger', 'warden'],
 ];
 
 export function createWaves(rng) {
@@ -24,7 +24,7 @@ export function createWaves(rng) {
     for (let i = 0; i < count; i += 1) {
       queue.push(rng.pick(kinds));
     }
-    if (wave % 5 === 0) queue.push('boss');
+    if (wave % 5 === 0) queue.push(wave === WAVE.finalWave ? 'prime' : 'boss');
     // Shuffle the queue so the wave never arrives in one kind's block.
     for (let i = queue.length - 1; i > 0; i -= 1) {
       const j = Math.floor(rng.next() * (i + 1));
@@ -51,9 +51,9 @@ export function createWaves(rng) {
       spawnTimer = interval * rng.range(0.7, 1.3);
       const kind = queue.shift();
       const pos = edgeSpawn(rng);
-      // The boss enters from the top centre, alone and announced.
-      if (kind === 'boss') {
-        spawnEnemy('boss', FIELD.width / 2, -80, wave, false, rng);
+      // The final boss enters from the top centre, alone and announced.
+      if (kind === 'boss' || kind === 'prime') {
+        spawnEnemy(kind, FIELD.width / 2, -80, wave, false, rng);
       } else {
         const elite = rng.chance(WAVE.eliteChance) && kind !== 'mini';
         spawnEnemy(kind, pos.x, pos.y, wave, elite, rng);

@@ -17,7 +17,7 @@ export function createEntities() {
     enemies.push({
       active: false, kind: 'drifter', x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1,
       radius: 18, speed: 90, damage: 10, score: 50, shards: 2, color: '#fff',
-      elite: false, t: 0, fireTimer: 0, phase: 0, flash: 0,
+      elite: false, t: 0, fireTimer: 0, phase: 0, flash: 0, shield: 0, maxShield: 0,
       mode: 'stalk', modeTimer: 0, lockX: 0, lockY: 0,
     });
   }
@@ -36,14 +36,14 @@ export function createEntities() {
     enemies,
     shards,
 
-    spawnPlayerBullet(x, y, angle, damage, radius, pierce) {
+    spawnPlayerBullet(x, y, angle, damage, radius, pierce, speed = PLAYER.bulletSpeed) {
       const b = playerBullets[bulletCursor];
       bulletCursor = (bulletCursor + 1) % playerBullets.length;
       b.active = true;
       b.x = x;
       b.y = y;
-      b.vx = Math.cos(angle) * PLAYER.bulletSpeed;
-      b.vy = Math.sin(angle) * PLAYER.bulletSpeed;
+      b.vx = Math.cos(angle) * speed;
+      b.vy = Math.sin(angle) * speed;
       b.damage = damage;
       b.radius = radius;
       b.pierce = pierce;
@@ -83,6 +83,8 @@ export function createEntities() {
       e.shards = base.shards * (elite ? 3 : 1);
       e.color = base.color;
       e.elite = elite;
+      e.shield = base.shield ?? 0;
+      e.maxShield = e.shield;
       e.t = 0;
       e.fireTimer = rng.range(1.2, 2.6);
       e.phase = rng.angle();

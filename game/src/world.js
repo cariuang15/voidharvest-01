@@ -12,6 +12,7 @@ export const EVENT_OVER = 2;
 export const EVENT_WAVE_CLEAR = 4;
 export const EVENT_BOSS = 8;
 export const EVENT_KILL = 16;
+export const EVENT_VICTORY = 32;
 
 export function createWorld(rng, audio, particles) {
   const entities = createEntities();
@@ -20,7 +21,7 @@ export function createWorld(rng, audio, particles) {
   const state = {
     time: 0,
     wave: 0,
-    phase: 'play', // 'play' | 'draft' | 'over'
+    phase: 'play', // 'play' | 'draft' | 'over' | 'victory'
     score: 0,
     shards: 0,
     shardsCollected: 0,
@@ -37,6 +38,10 @@ export function createWorld(rng, audio, particles) {
     draft: [],
     taken: {},
     draftTimer: 0,
+    rush: false, // this wave drops double shards
+    announce: '',
+    announceTimer: 0,
+    primeSlain: false, // the wave-10 final boss, once
     player: null,
     mods: null,
   };
@@ -45,7 +50,7 @@ export function createWorld(rng, audio, particles) {
     return {
       damage: 1, fireInterval: PLAYER.fireInterval, bullets: 1, pierce: 0,
       speed: 1, magnet: 1, crit: 0, regen: 0, shardValue: 1, bulletRadius: 1,
-      dashCooldown: PLAYER.dashCooldown, maxHull: PLAYER.hull,
+      bulletSpeed: 1, dashCooldown: PLAYER.dashCooldown, maxHull: PLAYER.hull,
     };
   }
 
@@ -80,12 +85,23 @@ export function createWorld(rng, audio, particles) {
       m.bulletRadius *= 1.25;
       m.damage *= 1.12;
     }
+    if (id === 'repair') {
+      state.player.hull = Math.min(m.maxHull, state.player.hull + 50);
+    }
+    if (id === 'novacore') {
+      nova.setChargeRate(1 + t[id]);
+    }
+    if (id === 'bulletvel') m.bulletSpeed *= 1.25;
   }
 
   function startWave(wave) {
     state.wave = wave;
     state.phase = 'play';
-    state.banner = wave % 5 === 0 ? `WAVE ${wave} — VOID MAW` : `WAVE ${wave}`;
+    state.rush = wave % WAVE.rushEvery === 0 && wave % 5 !== 0;
+    if (wave === WAVE.finalWave) state.banner = `WAVE ${wave} — VOID MAW PRIME`;
+    else if (wave % 5 === 0) state.banner = `WAVE ${wave} — VOID MAW`;
+    else if (state.rush) state.banner = `WAVE ${wave} — SHARD RUSH`;
+    else state.banner = `WAVE ${wave}`;
     state.bannerTimer = WAVE.bannerSeconds;
     waves.startWave(wave);
     if (wave % 5 === 0) audio.boss();
@@ -107,10 +123,14 @@ export function createWorld(rng, audio, particles) {
       state.comboTimer = COMBO.window;
       state.comboMult = Math.min(COMBO.maxMult, 1 + state.combo * COMBO.step);
       state.bestCombo = Math.max(state.bestCombo, state.combo);
+      if (state.combo === 10) { state.announce = 'RAMPAGE'; state.announceTimer = 1.6; }
+      if (state.combo === 20) { state.announce = 'UNSTOPPABLE'; state.announceTimer = 1.6; }
+      if (state.combo === 30) { state.announce = 'VOID REAPER'; state.announceTimer = 1.6; }
       const gained = Math.round(e.score * state.comboMult);
       state.score += gained;
       particles.text(e.x, e.y - e.radius, `+${gained}`, '#eef4ff', e.elite ? 20 : 15);
-      for (let i = 0; i < e.shards; i += 1) entities.spawnShard(e.x, e.y, 1, rng);
+      const drops = e.shards * (state.rush ? 2 : 1);
+      for (let i = 0; i < drops; i += 1) entities.spawnShard(e.x, e.y, 1, rng);
       if (e.kind === 'splitter') {
         for (let i = 0; i < 2; i += 1) {
           const a = rng.angle();
@@ -121,6 +141,18 @@ export function createWorld(rng, audio, particles) {
         particles.ring(e.x, e.y, '#ffffff', 320, 0.8, 5);
         for (let i = 0; i < 12; i += 1) entities.spawnShard(e.x, e.y, 1, rng);
         state.score += 500;
+      }
+      if (e.kind === 'prime') {
+        // The campaign is won: the final boss falls, the run ends in victory.
+        state.primeSlain = true;
+        state.score += 5000;
+        particles.ring(e.x, e.y, '#ffffff', 480, 1.0, 6);
+        particles.ring(e.x, e.y, '#d400ff', 360, 0.9, 5);
+        particles.burst(e.x, e.y, '#d400ff', 60, 460, 4, 1.1);
+        for (let i = 0; i < 24; i += 1) entities.spawnShard(e.x, e.y, 1, rng);
+        state.shake = 18;
+        audio.over();
+        state.phase = 'victory';
       }
     }
   }
@@ -238,6 +270,7 @@ export function createWorld(rng, audio, particles) {
           PLAYER.bulletDamage * m.damage * (rng.chance(m.crit) ? 2 : 1),
           PLAYER.bulletRadius * m.bulletRadius,
           m.pierce,
+          PLAYER.bulletSpeed * m.bulletSpeed,
         );
       }
       particles.trail(p.x + Math.cos(p.angle) * 24, p.y + Math.sin(p.angle) * 24, '#aef3ff', 2);
@@ -256,7 +289,8 @@ export function createWorld(rng, audio, particles) {
       const dist = Math.hypot(dx, dy) || 1;
       const ux = dx / dist;
       const uy = dy / dist;
-      if (e.kind === 'drifter' || e.kind === 'mini' || e.kind === 'splitter') {
+      if (e.kind === 'drifter' || e.kind === 'mini' || e.kind === 'splitter' || e.kind === 'warden') {
+        // Chasers: the warden is slow but its shield ring eats the first hits.
         e.vx += ux * e.speed * 2.4 * dt;
         e.vy += uy * e.speed * 2.4 * dt;
         const s = Math.hypot(e.vx, e.vy);
@@ -368,6 +402,41 @@ export function createWorld(rng, audio, particles) {
           entities.spawnEnemy('drifter', pos.x, pos.y, state.wave, false, rng);
           e.t = 0;
         }
+      } else if (e.kind === 'prime') {
+        // The final boss: a slow violet maw that fires a spiral ring, then an
+        // aimed three-shot burst, and sheds drifters while it hunts.
+        e.vx += ux * e.speed * 1.6 * dt;
+        e.vy += uy * e.speed * 1.6 * dt;
+        const s = Math.hypot(e.vx, e.vy);
+        if (s > e.speed) {
+          e.vx = (e.vx / s) * e.speed;
+          e.vy = (e.vy / s) * e.speed;
+        }
+        e.fireTimer -= dt;
+        if (e.fireTimer <= 0 && p.alive) {
+          e.fireTimer = 2.4;
+          const n = 12;
+          const base = e.t * 0.7;
+          for (let i = 0; i < n; i += 1) {
+            entities.spawnEnemyBullet(e.x, e.y, base + (i / n) * Math.PI * 2, 12);
+          }
+          audio.explode(false);
+          state.shake = Math.min(14, state.shake + 4);
+        }
+        e.modeTimer -= dt;
+        if (e.modeTimer <= 0 && p.alive) {
+          e.modeTimer = 3.6;
+          const aim = Math.atan2(dy, dx);
+          for (let i = -1; i <= 1; i += 1) {
+            entities.spawnEnemyBullet(e.x, e.y, aim + i * 0.16, 14);
+          }
+          audio.hit();
+        }
+        if (e.t > 8 && rng.chance(dt * 0.3)) {
+          const pos = { x: e.x + rng.range(-80, 80), y: e.y + rng.range(-40, 40) };
+          entities.spawnEnemy('drifter', pos.x, pos.y, state.wave, false, rng);
+          e.t = 0;
+        }
       }
       e.x += e.vx * dt;
       e.y += e.vy * dt;
@@ -403,6 +472,19 @@ export function createWorld(rng, audio, particles) {
         const dy = e.y - b.y;
         const rr = e.radius + b.radius;
         if (dx * dx + dy * dy < rr * rr) {
+          if (e.shield > 0) {
+            // The warden's shield ring eats the shot: no hull damage, one charge gone.
+            e.shield -= 1;
+            e.flash = 1;
+            particles.burst(b.x, b.y, '#7dffd4', 6, 200, 2, 0.4);
+            audio.hit();
+            if (e.shield === 0) {
+              particles.ring(e.x, e.y, '#7dffd4', 90, 0.5, 3);
+              particles.text(e.x, e.y - e.radius - 8, 'SHIELD DOWN', '#7dffd4', 14);
+            }
+            b.active = false;
+            break;
+          }
           e.hp -= b.damage;
           e.flash = 1;
           particles.burst(b.x, b.y, e.color, 4, 160, 2, 0.35);
@@ -507,6 +589,10 @@ export function createWorld(rng, audio, particles) {
     state.draft = [];
     state.taken = {};
     state.draftTimer = 0;
+    state.rush = false;
+    state.announce = '';
+    state.announceTimer = 0;
+    state.primeSlain = false;
     state.mods = baseMods();
     resetPlayer();
   }
@@ -524,13 +610,14 @@ export function createWorld(rng, audio, particles) {
 
     /** One fixed step. `input` is {move, aim, firing, dash}. Returns event bits. */
     step(dt, input) {
-      if (state.phase === 'over' || state.phase === 'draft') {
+      if (state.phase === 'over' || state.phase === 'draft' || state.phase === 'victory') {
         particles.update(dt);
         state.shake = Math.max(0, state.shake - dt * 30);
         return 0;
       }
       state.time += dt;
       state.bannerTimer = Math.max(0, state.bannerTimer - dt);
+      state.announceTimer = Math.max(0, state.announceTimer - dt);
       if (state.comboTimer > 0) {
         state.comboTimer -= dt;
         if (state.comboTimer <= 0) {
@@ -540,10 +627,12 @@ export function createWorld(rng, audio, particles) {
       }
       updatePlayer(dt, input.move, input.aim, input.firing, input.dash);
       if (input.nova) detonateNova();
+      if (state.phase === 'victory') return EVENT_VICTORY;
       let events = updateEnemies(dt);
       if (events & EVENT_OVER) return EVENT_OVER;
       events |= updateBullets(dt);
       if (state.phase === 'over') return EVENT_OVER;
+      if (state.phase === 'victory') return EVENT_VICTORY;
       updateShards(dt);
       particles.update(dt);
       state.shake = Math.max(0, state.shake - dt * 30);
@@ -580,6 +669,12 @@ export function createWorld(rng, audio, particles) {
     /** Leave the draft and start the next wave. */
     nextWave() {
       if (state.phase !== 'draft') return;
+      startWave(state.wave + 1);
+    },
+
+    /** After victory: keep flying in Endless mode from wave 11 on. */
+    continueEndless() {
+      if (state.phase !== 'victory') return;
       startWave(state.wave + 1);
     },
 

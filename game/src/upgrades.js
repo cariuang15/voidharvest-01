@@ -15,6 +15,9 @@ export const UPGRADES = [
   { id: 'regen', name: 'NANO WEAVE', desc: 'Regenerate 1.5 hull / sec', cost: 8, max: 3, icon: 'REG' },
   { id: 'shardvalue', name: 'RICH VEINS', desc: 'Shards worth +50% score', cost: 5, max: 3, icon: '$' },
   { id: 'bulletsize', name: 'HEAVY SLUGS', desc: '+25% bullet size & damage', cost: 8, max: 3, icon: 'BIG' },
+  { id: 'repair', name: 'FIELD REPAIR', desc: 'Restore 50 hull right now', cost: 5, max: 3, icon: 'FIX' },
+  { id: 'novacore', name: 'NOVA CORE', desc: 'NOVA charges +100% faster', cost: 9, max: 2, icon: 'NOVA' },
+  { id: 'bulletvel', name: 'HYPER VELOCITY', desc: '+25% bullet speed', cost: 6, max: 3, icon: 'VEL' },
 ];
 
 /**

@@ -4,6 +4,7 @@ import { NOVA } from './config.js';
 
 export function createNova() {
   let charge = 0;
+  let rate = 1; // NOVA CORE upgrades multiply how fast kills charge the meter
   return {
     /** 0..chargeMax. */
     get charge() {
@@ -14,7 +15,11 @@ export function createNova() {
     },
     /** One kill feeds the meter. */
     addKill() {
-      charge = Math.min(NOVA.chargeMax, charge + NOVA.perKill);
+      charge = Math.min(NOVA.chargeMax, charge + NOVA.perKill * rate);
+    },
+    /** Multiply the charge gained per kill (1 = normal). */
+    setChargeRate(r) {
+      rate = r;
     },
     /** Spend a full charge on a detonation. Returns false when not charged. */
     spend() {

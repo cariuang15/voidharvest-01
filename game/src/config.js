@@ -29,7 +29,11 @@ export const ENEMY = {
   mini: { radius: 10, hp: 8, speed: 150, damage: 8, score: 30, shards: 1, color: '#ffd166' },
   stinger: { radius: 17, hp: 26, speed: 62, damage: 12, score: 120, shards: 3, color: '#ff8c42' },
   charger: { radius: 19, hp: 40, speed: 78, damage: 16, score: 130, shards: 3, color: '#b8ff29' },
+  // Warden: a slow guard whose shield ring eats the first hits before its hull can be hurt.
+  warden: { radius: 22, hp: 30, speed: 55, damage: 12, score: 150, shards: 4, color: '#7dffd4', shield: 3 },
   boss: { radius: 64, hp: 900, speed: 46, damage: 22, score: 2000, shards: 40, color: '#ff2e63' },
+  // VOID MAW PRIME: the final boss of wave 10. Slay it and the run is won.
+  prime: { radius: 84, hp: 1800, speed: 42, damage: 24, score: 8000, shards: 120, color: '#d400ff' },
 };
 
 export const BULLET = {
@@ -60,6 +64,10 @@ export const WAVE = {
   eliteShardMult: 3,
   hpPerWave: 0.09,
   speedPerWave: 0.02,
+  /** The campaign's last wave: its final boss ends the run in victory. */
+  finalWave: 10,
+  /** Every Nth non-boss wave is a SHARD RUSH: every kill drops double shards. */
+  rushEvery: 4,
 };
 
 export const COMBO = {
