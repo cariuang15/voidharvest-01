@@ -1,14 +1,12 @@
 # VOIDHARVEST
-[![make.fun · best-game-01](https://make.fun/badge/best-game-01.svg)](https://make.fun/bounty/best-game-01?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
-[![rank](https://make.fun/badge/best-game-01/cariuang15/voidharvest-01/rank.svg)](https://make.fun/bounty/best-game-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
-[![reward](https://make.fun/badge/best-game-01/cariuang15/voidharvest-01/reward.svg)](https://make.fun/bounty/best-game-01?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
 
 **Harvest the dying stars. Spend their shards. Survive the Maw.**
 
 A neon twin-stick arena survival game that runs entirely offline in a desktop
 browser. You fly a lone harvester ship through a collapsing starfield: shoot
 the voidborn, collect the starshards they drop, and spend those shards on
-upgrades between waves. Every fifth wave, the **Void Maw** arrives.
+upgrades between waves. Every fifth wave, the **Void Maw** arrives. Slay the
+**Void Maw Prime on wave 10 to win** — then keep flying in Endless mode.
 
 ## How to play
 
@@ -23,13 +21,17 @@ open http://localhost:8080), then:
 
 ## The game
 
-- **5 enemy kinds** — drifters that chase, weavers that orbit and shoot,
-  splitters that burst into minis, fast minis, and the boss, the Void Maw,
-  with radial bullet patterns and drifter spawns.
+- **9 enemy kinds** — drifters that chase, weavers that orbit and shoot,
+  splitters that burst into minis, fast minis, stingers that snipe from range,
+  chargers that telegraph a lunge, shielded wardens whose ring eats the first
+  hits, and the boss, the Void Maw, with radial bullet patterns and drifter
+  spawns. On wave 10 the **Void Maw Prime** arrives: a bigger violet maw with
+  a spiral ring and an aimed three-shot burst.
 - **Shard economy** — every kill drops starshards. After each wave you draft
-  **1 of 3 upgrades** (12 in the pool: multishot, pierce, crit, dash, magnet,
-  hull, regen…) each with a shard cost that grows as you take it again.
-  Leftover shards add to your score.
+  **1 of 3 upgrades** (15 in the pool: multishot, pierce, crit, dash, magnet,
+  hull, regen, field repair, NOVA core, bullet velocity…) each with a shard
+  cost that grows as you take it again. Leftover shards add to your score.
+  Every 4th non-boss wave is a **Shard Rush**: double shard drops.
 - **Combo multiplier** — chained kills within 3 seconds raise your score
   multiplier up to x4; taking a hit resets it.
 - **Elites** — tougher, glowing variants worth triple score and shards.
@@ -37,8 +39,10 @@ open http://localhost:8080), then:
   hit flashes, synthesized WebAudio sound effects and an ambient music loop
   (no audio files, everything is generated).
 - **Complete loop** — animated title screen, wave banners, upgrade drafts,
-  pause, game-over screen with run stats, and a best score kept in
-  localStorage. A run is over when your hull reaches zero.
+  pause, game-over screen with run stats, a **victory screen** when the
+  Void Maw Prime falls on wave 10 (with Endless mode after it), and a best
+  score kept in localStorage. A run is over when your hull reaches zero —
+  or won when the Prime falls.
 
 ## Screenshots
 
@@ -56,7 +60,7 @@ game/
     world.js          simulation: player, waves, collisions, score
     entities.js       pools: bullets, enemies, shards
     waves.js          wave director + spawn tables
-    upgrades.js       the 12-upgrade draft pool
+    upgrades.js       the 15-upgrade draft pool
     render.js         canvas drawing, HUD, screens
     input.js          keyboard + mouse
     audio.js          synthesized WebAudio SFX + music
@@ -64,6 +68,7 @@ game/
     random.js         seeded RNG (mulberry32)
     shots.js          deterministic screenshot scenes + autopilot
     storage.js        best score in localStorage
+    nova.js           NOVA blast charge meter
     config.js         every tuning number and colour
 ```
 
@@ -74,4 +79,3 @@ output and writes `dossier.json` with the vendored `vendor/makefun-game.ts`.
 ## License
 
 MIT — see [LICENSE](LICENSE).
-<sub>Entered on [make.fun](https://make.fun/?ref=csc1bejp&utm_source=github&utm_medium=readme&utm_campaign=best-game-01) · AI agents build software for cash rewards</sub>
