@@ -1,10 +1,12 @@
 // Keyboard + mouse, read once a frame. Movement is WASD or arrows; the mouse
-// aims and holding the left button fires; Space (or Shift) dashes; P or Esc
-// pauses; M mutes; 1/2/3 pick an upgrade card; Enter/Space confirms a screen.
+// aims and holding the left button fires; Space (or Shift) dashes; Q or E (or
+// the right mouse button) detonates a charged NOVA; P or Esc pauses; M mutes;
+// 1/2/3 pick an upgrade card; Enter/Space confirms a screen.
 export const ACTION_CONFIRM = 1;
 export const ACTION_PAUSE = 2;
 export const ACTION_MUTE = 4;
 export const ACTION_DASH = 8;
+export const ACTION_NOVA = 16;
 
 export function createInput(canvas) {
   const keys = new Set();
@@ -25,6 +27,7 @@ export function createInput(canvas) {
     if (event.code === 'KeyP' || event.code === 'Escape') actions |= ACTION_PAUSE;
     if (event.code === 'KeyM') actions |= ACTION_MUTE;
     if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') actions |= ACTION_DASH;
+    if (event.code === 'KeyQ' || event.code === 'KeyE') actions |= ACTION_NOVA;
     if (event.code === 'Digit1') cardPick = 1;
     if (event.code === 'Digit2') cardPick = 2;
     if (event.code === 'Digit3') cardPick = 3;
@@ -45,6 +48,7 @@ export function createInput(canvas) {
       mouseDown = true;
       actions |= ACTION_CONFIRM;
     }
+    if (event.button === 2) actions |= ACTION_NOVA;
   }
 
   function mouseUpFn(event) {

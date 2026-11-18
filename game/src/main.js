@@ -9,7 +9,7 @@
 import { STEP } from './config.js';
 import { createRandom } from './random.js';
 import { createWorld, EVENT_OVER, EVENT_WAVE_CLEAR } from './world.js';
-import { ACTION_CONFIRM, ACTION_DASH, ACTION_MUTE, ACTION_PAUSE, createInput } from './input.js';
+import { ACTION_CONFIRM, ACTION_DASH, ACTION_MUTE, ACTION_NOVA, ACTION_PAUSE, createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { createParticles } from './particles.js';
 import {
@@ -64,6 +64,7 @@ function runGame() {
   let accumulator = 0;
   let last = performance.now();
   let dashQueued = false;
+  let novaQueued = false;
 
   // Screen readers (and anyone watching the page's text) hear the screen changes.
   function announce(message) {
@@ -90,6 +91,7 @@ function runGame() {
   function handleActions() {
     const actions = input.takeActions();
     if (actions & ACTION_DASH) dashQueued = true;
+    if (actions & ACTION_NOVA) novaQueued = true;
     if (actions & ACTION_MUTE) {
       const muted = audio.toggleMute();
       announce(muted ? 'Muted.' : 'Sound on.');
@@ -144,8 +146,10 @@ function runGame() {
       aim,
       firing: input.firing(),
       dash: dashQueued || input.dashHeld(),
+      nova: novaQueued,
     });
     dashQueued = false;
+    novaQueued = false;
     if (world.state.phase === 'draft' && (events & EVENT_WAVE_CLEAR)) {
       screen = SCREEN_DRAFT;
       announce(`Wave ${world.state.wave} cleared. Choose an upgrade, or press Enter for the next wave.`);

@@ -18,6 +18,7 @@ export function createEntities() {
       active: false, kind: 'drifter', x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1,
       radius: 18, speed: 90, damage: 10, score: 50, shards: 2, color: '#fff',
       elite: false, t: 0, fireTimer: 0, phase: 0, flash: 0,
+      mode: 'stalk', modeTimer: 0, lockX: 0, lockY: 0,
     });
   }
   const shards = [];
@@ -86,6 +87,10 @@ export function createEntities() {
       e.fireTimer = rng.range(1.2, 2.6);
       e.phase = rng.angle();
       e.flash = 0;
+      e.mode = 'stalk';
+      e.modeTimer = rng.range(0.4, 1.2);
+      e.lockX = 0;
+      e.lockY = 0;
       return e;
     },
 

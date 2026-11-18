@@ -75,11 +75,13 @@ export function createRenderer(canvas) {
       ctx.stroke();
     }
     for (const s of stars) {
+      // A slow parallax drift: the field slides past as the ship flies.
+      const sx = ((s.x - time * s.speed * 5) % FIELD.width + FIELD.width) % FIELD.width;
       const tw = 0.45 + 0.55 * Math.abs(Math.sin(time * s.speed + s.phase));
       ctx.globalAlpha = tw;
       ctx.fillStyle = '#cfe4ff';
       ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.arc(sx, s.y, s.r, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -116,14 +118,65 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
-  function drawEnemy(e, time) {
+  function drawEnemy(e, time, player) {
     ctx.save();
     ctx.translate(e.x, e.y);
     ctx.shadowColor = e.color;
     ctx.shadowBlur = e.elite ? 22 : 14;
     ctx.fillStyle = e.color;
     ctx.globalAlpha = e.flash > 0 ? 1 : 0.92;
-    if (e.kind === 'drifter') {
+    if (e.kind === 'stinger') {
+      // A long diamond with a barrel; a thin aim line while its shot is about to leave.
+      if (player && e.fireTimer < 0.5) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 140, 66, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 8]);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(player.x - e.x, player.y - e.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+      const aim = player ? Math.atan2(player.y - e.y, player.x - e.x) : 0;
+      ctx.rotate(aim);
+      ctx.beginPath();
+      ctx.moveTo(e.radius + 10, 0);
+      ctx.lineTo(0, -e.radius * 0.62);
+      ctx.lineTo(-e.radius, 0);
+      ctx.lineTo(0, e.radius * 0.62);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#1a0e04';
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(e.radius * 0.5, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (e.kind === 'charger') {
+      // A heavy arrowhead; it flashes white-hot while winding up its lunge.
+      if (e.mode === 'windup') {
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(time * 40);
+        ctx.fillStyle = '#ffffff';
+      }
+      const aim = Math.atan2(e.vy, e.vx) || 0;
+      ctx.rotate(e.mode === 'lunge' ? aim : e.t * 0.8);
+      ctx.beginPath();
+      ctx.moveTo(e.radius + 8, 0);
+      ctx.lineTo(-e.radius * 0.7, e.radius * 0.85);
+      ctx.lineTo(-e.radius * 0.3, 0);
+      ctx.lineTo(-e.radius * 0.7, -e.radius * 0.85);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (e.kind === 'drifter') {
       // Spiked circle.
       ctx.beginPath();
       const spikes = 8;
@@ -225,7 +278,7 @@ export function createRenderer(canvas) {
     ctx.fillRect(x, y, w * Math.max(0, Math.min(1, frac)), h);
   }
 
-  function drawHud(state, best) {
+  function drawHud(state, best, screen) {
     const p = state.player;
     ctx.textAlign = 'left';
     ctx.fillStyle = PALETTE.text;
@@ -247,6 +300,25 @@ export function createRenderer(canvas) {
     ctx.fillStyle = dashReady ? '#4de8ff' : 'rgba(255,255,255,0.25)';
     ctx.font = `700 15px ${FONT}`;
     ctx.fillText(dashReady ? 'DASH READY  [SPACE]' : 'DASH …', 24, 128);
+    // NOVA charge (play only: the draft screen has its own shard line).
+    if (screen === SCREEN_PLAY) {
+      const novaFrac = (state.novaCharge ?? 0) / 100;
+      ctx.fillStyle = PALETTE.text;
+      ctx.font = `700 15px ${FONT}`;
+      if (state.novaReady) {
+        const blink = 0.65 + 0.35 * Math.sin(state.time * 8);
+        ctx.globalAlpha = blink;
+        ctx.fillStyle = '#eaffb0';
+        ctx.fillText('NOVA READY  [Q]', 24, 152);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillText('NOVA', 24, 152);
+      }
+      bar(78, 140, 210, 14, novaFrac, state.novaReady ? '#b8ff29' : '#7a9e1d', 'rgba(255,255,255,0.12)');
+      ctx.fillStyle = PALETTE.text;
+      ctx.font = `600 14px ${FONT}`;
+      ctx.fillText(`${Math.floor(novaFrac * 100)}%`, 296, 153);
+    }
     // Wave + shards, right side.
     ctx.textAlign = 'right';
     ctx.fillStyle = PALETTE.text;
@@ -258,13 +330,13 @@ export function createRenderer(canvas) {
     ctx.fillStyle = PALETTE.muted;
     ctx.font = `600 15px ${FONT}`;
     ctx.fillText('shards buy upgrades between waves', FIELD.width - 24, 96);
-    // Combo, under the score.
-    if (state.combo >= 3) {
+    // Combo, under the score (play only: it collides with the draft subtitle).
+    if (state.combo >= 3 && screen === SCREEN_PLAY) {
       ctx.textAlign = 'left';
       ctx.fillStyle = '#ffb703';
       ctx.font = `800 22px ${FONT}`;
-      ctx.fillText(`COMBO x${state.comboMult.toFixed(1)}  (${state.combo} kills)`, 24, 158);
-      bar(24, 166, 150, 5, state.comboTimer / 3, '#ffb703', 'rgba(255,255,255,0.12)');
+      ctx.fillText(`COMBO x${state.comboMult.toFixed(1)}  (${state.combo} kills)`, 24, 186);
+      bar(24, 194, 150, 5, state.comboTimer / 3, '#ffb703', 'rgba(255,255,255,0.12)');
     }
     ctx.textAlign = 'left';
     // Boss health bar.
@@ -314,14 +386,15 @@ export function createRenderer(canvas) {
     ctx.fillStyle = PALETTE.text;
     ctx.font = `600 24px ${FONT}`;
     ctx.fillText('Harvest the dying stars. Spend their shards. Survive the Maw.', FIELD.width / 2, 262);
-    panel(FIELD.width / 2 - 330, 300, 660, 190);
+    panel(FIELD.width / 2 - 350, 300, 700, 190);
     ctx.fillStyle = PALETTE.text;
     ctx.font = `700 19px ${FONT}`;
-    ctx.fillText('WASD / ARROWS — fly      MOUSE — aim      HOLD CLICK — fire', FIELD.width / 2, 340);
-    ctx.fillText('SPACE — dash through danger      P — pause      M — mute', FIELD.width / 2, 372);
+    ctx.fillText('WASD / ARROWS — fly      MOUSE — aim      HOLD CLICK — fire', FIELD.width / 2, 336);
+    ctx.fillText('SPACE — dash through danger      Q — detonate a charged NOVA', FIELD.width / 2, 366);
+    ctx.fillText('P — pause      M — mute', FIELD.width / 2, 396);
     ctx.fillStyle = '#ffe066';
-    ctx.fillText('Kill voidborn, collect ◆ shards, buy 1 upgrade after each wave.', FIELD.width / 2, 404);
-    ctx.fillText('Every 5th wave the VOID MAW comes for you.', FIELD.width / 2, 432);
+    ctx.fillText('Kill voidborn, collect ◆ shards, buy 1 upgrade after each wave.', FIELD.width / 2, 428);
+    ctx.fillText('Kills charge your NOVA. Every 5th wave the VOID MAW comes for you.', FIELD.width / 2, 456);
     ctx.fillStyle = '#4de8ff';
     ctx.font = `800 26px ${FONT}`;
     ctx.fillText('CLICK OR PRESS ENTER TO LAUNCH', FIELD.width / 2, 540);
@@ -467,7 +540,7 @@ export function createRenderer(canvas) {
         ctx.restore();
       }
       for (const e of state.enemiesRef ?? []) {
-        if (e.active) drawEnemy(e, time);
+        if (e.active) drawEnemy(e, time, state.player);
       }
       for (const b of state.playerBulletsRef ?? []) {
         if (!b.active) continue;
@@ -490,9 +563,14 @@ export function createRenderer(canvas) {
         if (!b.active) continue;
         ctx.fillStyle = '#ff8fa3';
         ctx.shadowColor = '#ff2e63';
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 16;
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius * 0.45, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.shadowBlur = 0;
@@ -507,7 +585,18 @@ export function createRenderer(canvas) {
       state.particlesRef?.draw(ctx);
       ctx.restore();
 
-      if (screen === SCREEN_PLAY || screen === SCREEN_DRAFT || screen === SCREEN_PAUSED) drawHud(state, best);
+      // Low-hull warning: the void closes in, red at the edges.
+      const pl = state.player;
+      if (pl && pl.alive && screen === SCREEN_PLAY && pl.hull < state.mods.maxHull * 0.3) {
+        const pulse = 0.22 + 0.13 * Math.sin(time * 6);
+        const g = ctx.createRadialGradient(640, 360, 260, 640, 360, 720);
+        g.addColorStop(0, 'rgba(255, 45, 85, 0)');
+        g.addColorStop(1, `rgba(255, 45, 85, ${pulse})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, FIELD.width, FIELD.height);
+      }
+
+      if (screen === SCREEN_PLAY || screen === SCREEN_DRAFT || screen === SCREEN_PAUSED) drawHud(state, best, screen);
       if (screen === SCREEN_TITLE) drawTitle(state, best);
       if (screen === SCREEN_DRAFT) drawDraft(state);
       if (screen === SCREEN_PAUSED) drawPaused();

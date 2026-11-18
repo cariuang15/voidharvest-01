@@ -27,24 +27,34 @@ export const ENEMY = {
   weaver: { radius: 18, hp: 16, speed: 70, damage: 10, score: 80, shards: 3, color: '#c77dff' },
   splitter: { radius: 24, hp: 34, speed: 70, damage: 14, score: 100, shards: 3, color: '#ffb703' },
   mini: { radius: 10, hp: 8, speed: 150, damage: 8, score: 30, shards: 1, color: '#ffd166' },
+  stinger: { radius: 17, hp: 26, speed: 62, damage: 12, score: 120, shards: 3, color: '#ff8c42' },
+  charger: { radius: 19, hp: 40, speed: 78, damage: 16, score: 130, shards: 3, color: '#b8ff29' },
   boss: { radius: 64, hp: 900, speed: 46, damage: 22, score: 2000, shards: 40, color: '#ff2e63' },
 };
 
 export const BULLET = {
-  enemySpeed: 260,
-  enemyRadius: 6,
+  enemySpeed: 280,
+  enemyRadius: 7,
   enemyDamage: 10,
+};
+
+/** The NOVA blast: kills charge it, Q detonates it. */
+export const NOVA = {
+  chargeMax: 100,
+  perKill: 8, // kills to a full charge: 13
+  damage: 150,
+  radius: 9999, // hits every enemy on the field
 };
 
 export const WAVE = {
   /** Seconds of calm between waves while the upgrade draft is open. */
   draftSeconds: 9999, // the draft waits for the player; the timer is only a display cap
   bannerSeconds: 2.2,
-  baseCount: 8,
+  baseCount: 10,
   countPerWave: 4,
-  maxAlive: 32,
-  spawnInterval: 0.72,
-  spawnIntervalMin: 0.28,
+  maxAlive: 40,
+  spawnInterval: 0.62,
+  spawnIntervalMin: 0.24,
   eliteChance: 0.08,
   eliteHpMult: 3.2,
   eliteShardMult: 3,
@@ -77,6 +87,8 @@ export const PALETTE = {
   playerCore: '#eafcff',
   bullet: '#aef3ff',
   shard: '#ffe066',
+  nova: '#b8ff29',
+  novaReady: '#eaffb0',
   text: '#eef4ff',
   muted: '#8b93b8',
   danger: '#ff5d73',

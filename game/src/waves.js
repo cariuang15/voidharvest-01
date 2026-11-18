@@ -7,8 +7,9 @@ import { edgeSpawn } from './entities.js';
 const COMPOSITION = [
   ['drifter'],
   ['drifter', 'weaver'],
-  ['drifter', 'weaver', 'splitter'],
-  ['drifter', 'weaver', 'splitter', 'mini'],
+  ['drifter', 'weaver', 'splitter', 'stinger'],
+  ['drifter', 'weaver', 'splitter', 'mini', 'stinger'],
+  ['drifter', 'weaver', 'splitter', 'mini', 'stinger', 'charger'],
 ];
 
 export function createWaves(rng) {

@@ -6,8 +6,10 @@ import { FIELD, STEP } from './config.js';
 import { SCREEN_DRAFT, SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
 
 const START_SECONDS = 5;
-const PLAY_SECONDS = 34;
+const PLAY_SECONDS = 75;
 const END_LIMIT_SECONDS = 300;
+const SKILLED_END_SECONDS = 75;
+const DRAFT_WAVE = 3;
 const SAMPLE = STEP;
 
 /** Steer toward shards and away from danger, aim at the nearest enemy, fire. */
@@ -21,11 +23,14 @@ function autopilot(world, skilled) {
   let aimY = p.y + Math.sin(p.angle) * 100;
   let firing = false;
   let dash = false;
+  let nova = false;
 
   let nearest = null;
   let nearestD = Infinity;
+  let alive = 0;
   for (const e of ents.enemies) {
     if (!e.active) continue;
+    alive += 1;
     const d = Math.hypot(e.x - p.x, e.y - p.y);
     if (d < nearestD) {
       nearestD = d;
@@ -37,9 +42,11 @@ function autopilot(world, skilled) {
     aimY = nearest.y;
     firing = true;
   }
+  // Detonate a charged NOVA when the field is crowded.
+  if (s.novaReady && alive >= 5) nova = true;
   if (!skilled) {
     // A hurried player: stands still, shoots, never dashes — the void catches them.
-    return { move: { x: 0, y: 0 }, aim: { x: aimX, y: aimY }, firing, dash: false };
+    return { move: { x: 0, y: 0 }, aim: { x: aimX, y: aimY }, firing, dash: false, nova: false };
   }
   // Flee what is close, chase shards, drift back toward the middle.
   let close = 0;
@@ -77,7 +84,7 @@ function autopilot(world, skilled) {
     moveY /= len;
   }
   if (close >= 3 && p.dashCooldown <= 0) dash = true;
-  return { move: { x: moveX, y: moveY }, aim: { x: aimX, y: aimY }, firing, dash };
+  return { move: { x: moveX, y: moveY }, aim: { x: aimX, y: aimY }, firing, dash, nova };
 }
 
 /** How busy the frame looks: enemies, bullets and shards on screen. */
@@ -87,7 +94,11 @@ function busyness(world) {
   const p = world.state.player;
   for (const e of ents.enemies) {
     if (!e.active) continue;
+    // Off-screen enemies do not make a frame: the cover must show the fight, not its edge.
+    if (e.x < -10 || e.x > FIELD.width + 10 || e.y < -10 || e.y > FIELD.height + 10) continue;
     b += 3;
+    if (e.kind === 'boss') b += 40;
+    if (e.kind === 'charger' && e.mode === 'windup') b += 6;
     const d = Math.hypot(e.x - p.x, e.y - p.y);
     if (d < 320) b += 4;
     if (d < 160) b += 4;
@@ -128,7 +139,7 @@ export function stageShot(name, world, seed) {
     let bestScore = -1;
     world.rng.reseed(seed);
     world.startRun();
-    for (let i = 0; i < 45 / STEP; i += 1) {
+    for (let i = 0; i < PLAY_SECONDS / STEP; i += 1) {
       autoStep(world, true);
       if (world.state.phase === 'over') break;
       if (world.state.phase === 'play') {
@@ -148,11 +159,15 @@ export function stageShot(name, world, seed) {
   world.startRun();
   const limit = name === 'end' ? END_LIMIT_SECONDS : 240;
   for (let i = 0; i < limit / STEP; i += 1) {
-    const input = autopilot(world, name !== 'end');
+    // The end scene plays well first — collecting shards, buying upgrades —
+    // then stops moving, so the run ends with real stats instead of zeroes.
+    const skilled = name !== 'end' || i < SKILLED_END_SECONDS / STEP;
+    const input = autopilot(world, skilled);
     world.step(STEP, input);
     if (world.state.phase === 'over') break;
     if (world.state.phase === 'draft') {
-      if (name === 'draft') break;
+      // The draft scene shows a mid-run choice: leveled cards, a real shard purse.
+      if (name === 'draft' && world.state.wave >= DRAFT_WAVE) break;
       const affordable = world.state.draft
         .map((c, idx) => ({ c, idx }))
         .filter(({ c }) => c.price <= world.state.shards)

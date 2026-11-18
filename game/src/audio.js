@@ -131,6 +131,11 @@ export function createAudio() {
       noise(0.16, 0.14, 3200);
       tone(300, 0.14, 'sine', 0.08, 720);
     },
+    nova() {
+      noise(0.5, 0.3, 900);
+      tone(180, 0.5, 'sawtooth', 0.2, 1200);
+      tone(90, 0.6, 'sine', 0.22, 45);
+    },
     hurt() {
       tone(140, 0.25, 'sawtooth', 0.22, 55);
       noise(0.2, 0.18, 900);

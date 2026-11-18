@@ -1,10 +1,11 @@
 // The simulation: one fixed-step world holding the player, the enemies, the
 // bullets, the shards, the waves and the score. It knows nothing about the
 // canvas or the DOM — the renderer paints its state, main.js drives it.
-import { BULLET, COMBO, ENEMY, FIELD, PLAYER, SHARD, STEP, WAVE } from './config.js';
+import { BULLET, COMBO, ENEMY, FIELD, NOVA, PLAYER, SHARD, STEP, WAVE } from './config.js';
 import { createEntities } from './entities.js';
 import { createWaves } from './waves.js';
 import { draftUpgrades } from './upgrades.js';
+import { createNova } from './nova.js';
 
 export const EVENT_HIT = 1;
 export const EVENT_OVER = 2;
@@ -15,6 +16,7 @@ export const EVENT_KILL = 16;
 export function createWorld(rng, audio, particles) {
   const entities = createEntities();
   const waves = createWaves(rng);
+  const nova = createNova();
   const state = {
     time: 0,
     wave: 0,
@@ -30,6 +32,8 @@ export function createWorld(rng, audio, particles) {
     banner: '',
     bannerTimer: 0,
     shake: 0,
+    novaCharge: 0,
+    novaReady: false,
     draft: [],
     taken: {},
     draftTimer: 0,
@@ -91,6 +95,9 @@ export function createWorld(rng, audio, particles) {
   function killEnemy(e, award = true) {
     e.active = false;
     state.kills += 1;
+    nova.addKill();
+    state.novaCharge = nova.charge;
+    state.novaReady = nova.ready;
     particles.burst(e.x, e.y, e.color, e.elite ? 34 : 18, e.elite ? 320 : 240, e.elite ? 4 : 3);
     particles.ring(e.x, e.y, e.color, e.radius * 3.4);
     audio.explode(e.kind === 'boss' || e.elite);
@@ -116,6 +123,29 @@ export function createWorld(rng, audio, particles) {
         state.score += 500;
       }
     }
+  }
+
+  /** The NOVA blast: a full charge clears every enemy bullet and blasts every enemy on the field. */
+  function detonateNova() {
+    if (state.phase !== 'play' || !nova.spend()) return false;
+    const p = state.player;
+    state.novaCharge = 0;
+    state.novaReady = false;
+    particles.ring(p.x, p.y, '#b8ff29', 700, 0.7, 6);
+    particles.ring(p.x, p.y, '#ffffff', 420, 0.5, 4);
+    particles.burst(p.x, p.y, '#b8ff29', 40, 520, 4, 0.9);
+    particles.burst(p.x, p.y, '#ffffff', 20, 340, 3, 0.7);
+    state.shake = 16;
+    audio.nova();
+    for (const b of entities.enemyBullets) b.active = false;
+    // Snapshot: killing a splitter spawns minis, and they are not in this blast.
+    for (const e of entities.enemies.slice()) {
+      if (!e.active) continue;
+      e.hp -= NOVA.damage;
+      e.flash = 1;
+      if (e.hp <= 0) killEnemy(e);
+    }
+    return true;
   }
 
   function damagePlayer(amount, x, y) {
@@ -235,7 +265,6 @@ export function createWorld(rng, audio, particles) {
           e.vy = (e.vy / s) * e.speed;
         }
       } else if (e.kind === 'weaver') {
-        // Circles the player at mid range, weaving side to side, and shoots.
         const orbit = 300;
         const tangent = Math.atan2(dy, dx) + Math.PI / 2;
         const radial = dist > orbit + 40 ? 1 : dist < orbit - 40 ? -1 : 0;
@@ -252,6 +281,68 @@ export function createWorld(rng, audio, particles) {
           e.fireTimer = rng.range(1.8, 2.6);
           entities.spawnEnemyBullet(e.x, e.y, Math.atan2(dy, dx));
           audio.hit();
+        }
+      } else if (e.kind === 'stinger') {
+        // Holds off at long range and fires aimed shots; the renderer draws its
+        // aim line while the shot is about to leave (fireTimer under half a second).
+        const orbit = 420;
+        const tangent = Math.atan2(dy, dx) + Math.PI / 2;
+        const radial = dist > orbit + 40 ? 1 : dist < orbit - 40 ? -1 : 0;
+        const weave = Math.sin(e.t * 1.6 + e.phase) * 0.7;
+        e.vx += (ux * radial * 0.6 + Math.cos(tangent) * weave) * e.speed * 2 * dt;
+        e.vy += (uy * radial * 0.6 + Math.sin(tangent) * weave) * e.speed * 2 * dt;
+        const s = Math.hypot(e.vx, e.vy);
+        if (s > e.speed) {
+          e.vx = (e.vx / s) * e.speed;
+          e.vy = (e.vy / s) * e.speed;
+        }
+        e.fireTimer -= dt;
+        if (e.fireTimer <= 0 && dist < 640 && p.alive) {
+          e.fireTimer = rng.range(2.2, 3.0);
+          entities.spawnEnemyBullet(e.x, e.y, Math.atan2(dy, dx), 12);
+          audio.hit();
+        }
+      } else if (e.kind === 'charger') {
+        // Stalks, then flashes a warning, then lunges straight at the player.
+        e.modeTimer -= dt;
+        if (e.mode === 'stalk') {
+          e.vx += ux * e.speed * 2 * dt;
+          e.vy += uy * e.speed * 2 * dt;
+          const s = Math.hypot(e.vx, e.vy);
+          if (s > e.speed) {
+            e.vx = (e.vx / s) * e.speed;
+            e.vy = (e.vy / s) * e.speed;
+          }
+          if (e.modeTimer <= 0 && dist < 460 && p.alive) {
+            e.mode = 'windup';
+            e.modeTimer = 0.6;
+            e.lockX = ux;
+            e.lockY = uy;
+          }
+        } else if (e.mode === 'windup') {
+          // Shivers in place, glowing, before the lunge.
+          e.vx = (rng.next() - 0.5) * 60;
+          e.vy = (rng.next() - 0.5) * 60;
+          if (e.modeTimer <= 0) {
+            e.mode = 'lunge';
+            e.modeTimer = 0.45;
+            e.vx = e.lockX * 520;
+            e.vy = e.lockY * 520;
+            audio.dash();
+          }
+        } else if (e.mode === 'lunge') {
+          particles.trail(e.x, e.y, '#b8ff29', 3);
+          if (e.modeTimer <= 0) {
+            e.mode = 'recover';
+            e.modeTimer = 0.9;
+          }
+        } else {
+          e.vx *= 0.9;
+          e.vy *= 0.9;
+          if (e.modeTimer <= 0) {
+            e.mode = 'stalk';
+            e.modeTimer = rng.range(1.0, 2.0);
+          }
         }
       } else if (e.kind === 'boss') {
         e.vx += ux * e.speed * 1.6 * dt;
@@ -396,6 +487,7 @@ export function createWorld(rng, audio, particles) {
   function reset() {
     entities.clearAll();
     particles.clear();
+    nova.reset();
     state.time = 0;
     state.wave = 0;
     state.phase = 'play';
@@ -410,6 +502,8 @@ export function createWorld(rng, audio, particles) {
     state.banner = '';
     state.bannerTimer = 0;
     state.shake = 0;
+    state.novaCharge = 0;
+    state.novaReady = false;
     state.draft = [];
     state.taken = {};
     state.draftTimer = 0;
@@ -445,6 +539,7 @@ export function createWorld(rng, audio, particles) {
         }
       }
       updatePlayer(dt, input.move, input.aim, input.firing, input.dash);
+      if (input.nova) detonateNova();
       let events = updateEnemies(dt);
       if (events & EVENT_OVER) return EVENT_OVER;
       events |= updateBullets(dt);
